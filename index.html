@@ -191,7 +191,7 @@
   
   
   <div class="post-block home">
-    <link itemprop="mainEntityOfPage" href="https://westlake2014.github.io/2019/09/19/2019-09-19~3e2edfd6534e6566455d53083ebff55b/">
+    <link itemprop="mainEntityOfPage" href="https://westlake2014.github.io/2019/09/21/2019-09-21~6f7385042eea7c1244b94a761784a9ed/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="westlake2014">
@@ -205,7 +205,7 @@
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
             
-            <a href="/2019/09/19/2019-09-19~3e2edfd6534e6566455d53083ebff55b/" class="post-title-link" itemprop="url">Webmin</a>
+            <a href="/2019/09/21/2019-09-21~6f7385042eea7c1244b94a761784a9ed/" class="post-title-link" itemprop="url">Fortify SCA检测Java程序问题及解决方法 -</a>
           
         </h1>
 
@@ -220,7 +220,7 @@
                 
               
 
-              <time title="Created: 2019-09-19 00:00:00 / Modified: 23:15:16" itemprop="dateCreated datePublished" datetime="2019-09-19T00:00:00-04:00">2019-09-19</time>
+              <time title="Created: 2019-09-21 00:00:00 / Modified: 04:28:08" itemprop="dateCreated datePublished" datetime="2019-09-21T00:00:00-04:00">2019-09-21</time>
             </span>
           
             
@@ -241,116 +241,11 @@
       
           <div id="readability-page-1" class="page">
 
-<div>
-
-<div>
-
-<p><span> 3gstudent </span> <a href="https://www.4hou.com/category/technology" target="_blank" rel="noopener"><span> 技术<br></span></a> <span> 2019年8月21日发布<br></span></p>
-<span>
-![Favorite](https://www.4hou.com/wp-content/plugins/wp-favorite-posts/img/star.png
-"Favorite") <span rel="nofollow" title="收藏"> 收藏 </span> </span>
-
-</div>
-
-</div>
-
-<p>导语：2019年8月10日，Ozkan(@ehakkus)在DEFCON AppSec Village公开了一个0<br>day，1.930以下版本的Webmin存在远程代码执行漏洞。我对这个漏洞进行了跟踪研究，本文将要记录测试过程，根据漏洞原理使用Python编写一个POC，并给出防御建议。</p>
-<div>
-
-<p><strong><span> 0x00 前言 </span></strong></p>
-<p>2019年8月10日，Ozkan(@ehakkus)在DEFCON AppSec Village公开了一个0<br>day，1.930以下版本的Webm
+<div id="contenttxt">
           <!--noindex-->
           
             <div class="post-button text-center">
-              <a class="btn" href="/2019/09/19/2019-09-19~3e2edfd6534e6566455d53083ebff55b/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-          <div class="post-eof"></div>
-        
-      </footer>
-  </div>
-  
-  
-  
-  </article>
-
-    
-        <article itemscope itemtype="http://schema.org/Article">
-  
-  
-  
-  <div class="post-block home">
-    <link itemprop="mainEntityOfPage" href="https://westlake2014.github.io/2019/09/19/2019-09-19~5fb3a5613c92213568a1fe26afd0379b/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="name" content="westlake2014">
-      <meta itemprop="description" content="">
-      <meta itemprop="image" content="/images/avatar.gif">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Hexo">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-            
-            <a href="/2019/09/19/2019-09-19~5fb3a5613c92213568a1fe26afd0379b/" class="post-title-link" itemprop="url">深入分析web.config上传方面的安全问题（上） -</a>
-          
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">Posted on</span>
-
-              
-                
-              
-
-              <time title="Created: 2019-09-19 00:00:00 / Modified: 23:15:17" itemprop="dateCreated datePublished" datetime="2019-09-19T00:00:00-04:00">2019-09-19</time>
-            </span>
-          
-            
-
-            
-          
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <div id="readability-page-1" class="page">
-
-<div>
-
-<p><span> <strong>引言</strong> </span></p>
-<p>这是我撰写的第二篇分析web.config安全问题的文章。早在2014年<br><a href="https://soroush.secproject.com/blog/2014/07/upload-a-web-config-file-for-fun-profit/" target="_blank" rel="noopener">[1]</a><br>的时候，我们撰写过一篇这方面的文章，其中介绍了一种运行ASP经典代码的方法，以及如何仅通过上传web.config文件发动存储型XSS攻击。</p>
-<p>在这篇文章中，我们将着眼于运行web.config文件本身，以及在把web.config上传到IIS服务器上的应用程序过程中可以派上用场的其他技术。这里的主要目标，是使用web.config文件在服务器上执行代码或命令，以及针对存储型XSS的其他攻击技术。</p>
-<p>本文中描述的技术可以分为两大类，具体取决于它们是否可以在应用程序根目录或子文件夹/虚拟目录中上传web.config文件。如果您不熟悉涉及IIS的虚拟目录和应用程序等术语的话，请参阅文献<br><a href="https://docs.microsoft.com/en-us/iis/get-started/planning-your-iis-architecture/understand
-          <!--noindex-->
-          
-            <div class="post-button text-center">
-              <a class="btn" href="/2019/09/19/2019-09-19~5fb3a5613c92213568a1fe26afd0379b/#more" rel="contents">
+              <a class="btn" href="/2019/09/21/2019-09-21~6f7385042eea7c1244b94a761784a9ed/#more" rel="contents">
                 Read more &raquo;
               </a>
             </div>
@@ -420,7 +315,7 @@
         
           <a href="/archives/">
         
-          <span class="site-state-item-count">2</span>
+          <span class="site-state-item-count">1</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
